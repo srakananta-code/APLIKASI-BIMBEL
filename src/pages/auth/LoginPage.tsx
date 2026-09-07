@@ -37,7 +37,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessRedirect }) => {
 
   // Register form state (Admin baru)
   const [regName, setRegName] = useState('');
-  const [regInstitution, setRegInstitution] = useState('Bimbingan Belajar EduCendikia');
+  const [regInstitution, setRegInstitution] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
@@ -423,6 +423,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onSuccessRedirect }) => {
                       className="block w-full pl-9 pr-3 py-2.5 bg-slate-800/80 border border-slate-700 rounded-xl text-white placeholder-slate-500 text-sm focus:outline-hidden focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Jaminan Database Bersih */}
+              <div className="p-3 bg-blue-950/40 border border-blue-800/60 rounded-xl text-xs text-blue-200 flex items-start gap-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div className="leading-relaxed">
+                  <span className="font-semibold text-white">Database Bersih 100%:</span> Seluruh data contoh/demo akan otomatis dikosongkan saat akun Anda dibuat, sehingga sistem siap langsung diisi data asli bimbel Anda.
                 </div>
               </div>
 

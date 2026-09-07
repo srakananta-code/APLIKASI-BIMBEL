@@ -22,11 +22,14 @@ import {
   RefreshCw,
   ExternalLink,
   Copy,
-  Check
+  Check,
+  Trash2,
+  Sparkles
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
 import { userService, CreateUserData } from '../../services/userService';
+import { seedService } from '../../services/seedService';
 import { User, UserRole, Teacher } from '../../types';
 import { formatDateTimeIndonesian } from '../../services/businessLogic';
 
@@ -75,11 +78,32 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onNavigate }) => {
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editRole, setEditRole] = useState<UserRole>('GURU');
   const [editTeacherId, setEditTeacherId] = useState<string>('');
+  const [isCleaning, setIsCleaning] = useState(false);
 
   const fetchUsers = async () => {
     setIsLoading(true);
     try {
-      const data = await userService.getAllUsers();
+      let data = await userService.getAllUsers();
+
+      // Cek apakah pengguna saat ini adalah akun resmi (bukan akun demo awal @educendikia.com)
+      const isRegisteredAccount = Boolean(
+        currentAdminProfile &&
+        !currentAdminProfile.email?.toLowerCase().endsWith('@educendikia.com') &&
+        currentAdminProfile.id !== 'USR-ADMIN'
+      );
+
+      const isDemoCleaned = seedService.isDemoCleaned();
+
+      // Jika akun terdaftar atau database sudah ditandai bersih, bersihkan otomatis akun demo dummy tersisa
+      if ((isRegisteredAccount || isDemoCleaned) && data.length > 1) {
+        try {
+          await userService.cleanDemoUsers(currentAdminProfile || undefined);
+          data = await userService.getAllUsers();
+        } catch (cleanErr) {
+          console.warn('Notice saat auto-clean akun demo di latar belakang:', cleanErr);
+        }
+      }
+
       setUsersList(data);
     } catch (err) {
       console.error('Error fetching users:', err);
@@ -92,6 +116,57 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onNavigate }) => {
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  const handleDeleteUser = async (user: User) => {
+    const isCurrent = Boolean(
+      (currentAdminProfile?.id && user.id === currentAdminProfile.id) ||
+      (currentAdminProfile?.uid && (user.uid === currentAdminProfile.uid || user.id === currentAdminProfile.uid)) ||
+      (currentAdminProfile?.email && user.email.toLowerCase() === currentAdminProfile.email.toLowerCase())
+    );
+
+    if (isCurrent) {
+      addToast('warning', 'Anda tidak dapat menghapus akun Anda sendiri.');
+      return;
+    }
+
+    const confirmDelete = window.confirm(
+      `Apakah Anda yakin ingin menghapus akun "${user.displayName || user.name}" (${user.email}) secara permanen?\n\nAkun ini akan dihapus dari sistem dan tidak dapat login lagi.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      await userService.deleteUser(user.id, {
+        id: currentAdminProfile?.id || 'ADMIN',
+        name: currentAdminProfile?.name || 'Administrator'
+      });
+
+      setUsersList(prev => prev.filter(u => u.id !== user.id));
+      addToast('success', `Akun ${user.displayName || user.name} berhasil dihapus permanen.`);
+    } catch (err) {
+      console.error('Error deleting user:', err);
+      addToast('error', 'Gagal menghapus akun pengguna.');
+    }
+  };
+
+  const handleCleanDemoAccounts = async () => {
+    const confirmClean = window.confirm(
+      'PERINGATAN: Apakah Anda yakin ingin menghapus SEMUA akun demo dan uji coba lain?\n\nHanya akun Administrator Anda yang akan dipertahankan dalam sistem. Semua akun dummy akan dihapus permanen sehingga sistem 100% bersih.'
+    );
+    if (!confirmClean) return;
+
+    setIsCleaning(true);
+    try {
+      const deletedCount = await userService.cleanDemoUsers(currentAdminProfile || undefined);
+      const updated = await userService.getAllUsers();
+      setUsersList(updated);
+      addToast('success', `Berhasil membersihkan ${deletedCount} akun demo. Database pengguna sekarang bersih.`);
+    } catch (err) {
+      console.error('Error cleaning demo users:', err);
+      addToast('error', 'Gagal membersihkan akun demo.');
+    } finally {
+      setIsCleaning(false);
+    }
+  };
 
   const handleToggleStatus = async (user: User) => {
     if (user.id === currentAdminProfile?.id) {
@@ -289,6 +364,19 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onNavigate }) => {
         </div>
 
         <div className="flex items-center gap-2">
+          {usersList.length > 1 && (
+            <button
+              onClick={handleCleanDemoAccounts}
+              disabled={isCleaning || isLoading}
+              className="inline-flex items-center gap-1.5 px-3 py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 font-semibold rounded-xl text-xs sm:text-sm border border-rose-200 transition-all cursor-pointer disabled:opacity-50"
+              title="Hapus semua akun demo contoh dan uji coba lain, hanya pertahankan akun Administrator Anda"
+            >
+              <Trash2 className="w-4 h-4 text-rose-600" />
+              <span className="hidden sm:inline">Bersihkan Akun Demo ({usersList.length - 1})</span>
+              <span className="sm:hidden">Bersihkan Demo</span>
+            </button>
+          )}
+
           <button
             onClick={fetchUsers}
             disabled={isLoading}
@@ -425,7 +513,11 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onNavigate }) => {
               ) : (
                 filteredUsers.map(user => {
                   const linkedTeacher = teachers.find(t => t.id === user.teacherId);
-                  const isCurrent = user.id === currentAdminProfile?.id;
+                  const isCurrent = Boolean(
+                    (currentAdminProfile?.id && user.id === currentAdminProfile.id) ||
+                    (currentAdminProfile?.uid && (user.uid === currentAdminProfile.uid || user.id === currentAdminProfile.uid)) ||
+                    (currentAdminProfile?.email && user.email.toLowerCase() === currentAdminProfile.email.toLowerCase())
+                  );
 
                   return (
                     <tr key={user.id} className="hover:bg-slate-50/80 transition-colors">
@@ -549,6 +641,20 @@ export const UsersPage: React.FC<UsersPageProps> = ({ onNavigate }) => {
                             title={user.isActive !== false ? 'Nonaktifkan Akun' : 'Aktifkan Akun'}
                           >
                             <Power className="w-4 h-4" />
+                          </button>
+
+                          {/* Delete User */}
+                          <button
+                            onClick={() => handleDeleteUser(user)}
+                            disabled={isCurrent}
+                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                              isCurrent 
+                                ? 'opacity-30 cursor-not-allowed text-slate-300' 
+                                : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                            }`}
+                            title={isCurrent ? 'Tidak dapat menghapus akun Anda sendiri' : 'Hapus Akun Pengguna Secara Permanen'}
+                          >
+                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       </td>

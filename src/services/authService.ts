@@ -13,6 +13,7 @@ import { auth, db } from '../lib/firebase';
 import { User, UserRole } from '../types';
 import { INITIAL_USERS } from '../data/initialData';
 import { auditLogService } from './auditLogService';
+import { seedService } from './seedService';
 
 const SESSION_STORAGE_KEY = 'educendikia_session_user';
 
@@ -407,6 +408,13 @@ export const authService = {
     // Simpan sesi login lokal aktif
     this.setStoredSessionUser(newAdminProfile);
 
+    // Otomatis kosongkan seluruh data demo agar bimbel milik pengguna bersih tanpa data bekas demo
+    try {
+      await seedService.clearAllDemoData(newAdminProfile);
+    } catch (clearErr) {
+      console.warn('Notice clearing demo data on admin registration:', clearErr);
+    }
+
     // Catat Audit Log
     await auditLogService.create({
       userId: uid,
@@ -415,7 +423,7 @@ export const authService = {
       userRole: 'ADMIN',
       action: 'USER_CREATED',
       targetId: uid,
-      details: `Administrator baru ${cleanDisplayName} (${cleanEmail}) berhasil mendaftarkan akun untuk bimbel "${cleanInstitution}".`,
+      details: `Administrator baru ${cleanDisplayName} (${cleanEmail}) berhasil mendaftarkan akun untuk bimbel "${cleanInstitution}". Seluruh data demo telah dikosongkan.`,
       description: `Pendaftaran Administrator Baru: ${cleanDisplayName}`
     }).catch(() => {});
 

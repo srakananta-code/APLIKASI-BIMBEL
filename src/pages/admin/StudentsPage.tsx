@@ -19,17 +19,23 @@ import {
   AlertTriangle,
   Trash2,
   FileSpreadsheet,
-  Upload
+  Upload,
+  Download,
+  HardDrive
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { formatRupiah, formatDateIndonesian } from '../../services/businessLogic';
 import { StatusBadge } from '../../components/common/StatusBadge';
 import { Modal } from '../../components/common/Modal';
 import { ConfirmDialog } from '../../components/common/ConfirmDialog';
-import { BatchImportModal } from '../../components/students/BatchImportModal';
+import { BatchImportModal, downloadStudentImportTemplate } from '../../components/students/BatchImportModal';
 import { Student } from '../../types';
 
-export const StudentsPage: React.FC = () => {
+interface StudentsPageProps {
+  onNavigate?: (page: string) => void;
+}
+
+export const StudentsPage: React.FC<StudentsPageProps> = ({ onNavigate }) => {
   const {
     students,
     programs,
@@ -134,19 +140,18 @@ export const StudentsPage: React.FC = () => {
   const validateForm = () => {
     const errors: Record<string, string> = {};
     if (!formData.name.trim()) errors.name = 'Nama siswa wajib diisi';
-    if (!formData.nis.trim()) errors.nis = 'NIS wajib diisi';
+    if (!formData.grade.trim()) errors.grade = 'Kelas wajib dipilih / diisi';
     
-    // Check NIS uniqueness
-    const duplicateNis = students.find(
-      s => s.nis.trim().toLowerCase() === formData.nis.trim().toLowerCase() && s.id !== editingStudent?.id
-    );
-    if (duplicateNis) {
-      errors.nis = `NIS ${formData.nis} sudah digunakan oleh siswa ${duplicateNis.name}`;
+    // Check NIS uniqueness jika diisi manual
+    if (formData.nis.trim()) {
+      const duplicateNis = students.find(
+        s => s.nis.trim().toLowerCase() === formData.nis.trim().toLowerCase() && s.id !== editingStudent?.id
+      );
+      if (duplicateNis) {
+        errors.nis = `NIS ${formData.nis} sudah digunakan oleh siswa ${duplicateNis.name}`;
+      }
     }
 
-    if (!formData.parentName.trim()) errors.parentName = 'Nama orang tua wajib diisi';
-    if (!formData.parentPhone.trim()) errors.parentPhone = 'No HP orang tua wajib diisi';
-    if (formData.programIds.length === 0) errors.programIds = 'Pilih minimal satu program';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -155,10 +160,29 @@ export const StudentsPage: React.FC = () => {
     e.preventDefault();
     if (!validateForm()) return;
 
+    // Jika NIS dikosongi, buatkan NIS otomatis unik
+    let finalNis = formData.nis.trim();
+    if (!finalNis) {
+      const existingNisSet = new Set(students.map(s => s.nis.trim().toLowerCase()));
+      let counter = students.length + 1;
+      while (existingNisSet.has(`nis-2026-${String(counter).padStart(3, '0')}`)) {
+        counter++;
+      }
+      finalNis = `NIS-2026-${String(counter).padStart(3, '0')}`;
+    }
+
+    const payload = {
+      ...formData,
+      nis: finalNis,
+      parentName: formData.parentName.trim() || '-',
+      parentPhone: formData.parentPhone.trim() || '-',
+      programIds: formData.programIds.length > 0 ? formData.programIds : (programs[0] ? [programs[0].id] : [])
+    };
+
     if (editingStudent) {
-      updateStudent(editingStudent.id, formData);
+      updateStudent(editingStudent.id, payload);
     } else {
-      createStudent(formData);
+      createStudent(payload);
     }
     setIsFormModalOpen(false);
   };
@@ -178,6 +202,40 @@ export const StudentsPage: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 self-start sm:self-auto flex-wrap">
+          {onNavigate && (
+            <>
+              <button
+                id="btn-google-sheets-siswa"
+                onClick={() => onNavigate('google-sheets')}
+                className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-emerald-700 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold shadow-xs flex items-center gap-2 transition-colors cursor-pointer"
+                title="Buka Google Sheets untuk ekspor atau impor data siswa"
+              >
+                <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
+                <span>Google Sheets</span>
+              </button>
+
+              <button
+                id="btn-google-drive-siswa"
+                onClick={() => onNavigate('google-drive')}
+                className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-indigo-700 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold shadow-xs flex items-center gap-2 transition-colors cursor-pointer"
+                title="Buka Google Drive untuk manajemen file & pencadangan"
+              >
+                <HardDrive className="w-4 h-4 text-indigo-600" />
+                <span>Google Drive</span>
+              </button>
+            </>
+          )}
+
+          <button
+            id="btn-unduh-template-siswa"
+            onClick={() => downloadStudentImportTemplate(programs)}
+            className="px-3.5 py-2.5 bg-white hover:bg-slate-50 text-indigo-700 border border-indigo-200 rounded-xl text-xs sm:text-sm font-semibold shadow-xs flex items-center gap-2 transition-colors cursor-pointer"
+            title="Unduh template Excel / CSV (Nama dan Kelas wajib, sisanya bisa dikosongi)"
+          >
+            <Download className="w-4 h-4 text-indigo-600" />
+            <span>Unduh Template CSV</span>
+          </button>
+
           <button
             id="btn-import-siswa-masal"
             onClick={() => setIsBatchImportModalOpen(true)}
@@ -618,14 +676,24 @@ export const StudentsPage: React.FC = () => {
         isOpen={isFormModalOpen}
         onClose={() => setIsFormModalOpen(false)}
         title={editingStudent ? 'Edit Data Siswa' : 'Tambah Siswa Baru'}
-        description="Lengkapi data diri siswa, wali murid, dan pilihan program bimbingan"
+        description="Lengkapi data diri siswa. Hanya Nama dan Kelas yang wajib diisi."
         maxWidth="lg"
       >
         <form onSubmit={handleSubmitForm} className="space-y-4 text-xs">
+          {/* Petunjuk Aturan Pengisian */}
+          <div className="p-3 bg-indigo-50/80 border border-indigo-100 rounded-xl flex items-start gap-2.5">
+            <span className="w-4 h-4 rounded-full bg-indigo-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+              i
+            </span>
+            <p className="text-[11px] text-indigo-900 leading-relaxed">
+              <strong>Aturan Pengisian:</strong> Hanya kolom <strong className="underline">Nama Lengkap</strong> dan <strong className="underline">Tingkat / Kelas</strong> yang wajib diisi. Kolom NIS, asal sekolah, program, data orang tua, nomor HP, dan alamat <span className="font-semibold text-emerald-700">bisa dikosongi saja</span>.
+            </p>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Nama Lengkap Siswa *
+                Nama Lengkap Siswa <span className="text-rose-500">* (Wajib)</span>
               </label>
               <input
                 type="text"
@@ -641,13 +709,13 @@ export const StudentsPage: React.FC = () => {
 
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                NIS (Nomor Induk Siswa) *
+                NIS <span className="text-slate-400 font-normal">(Opsional - otomatis dibuat jika kosong)</span>
               </label>
               <input
                 type="text"
                 value={formData.nis}
                 onChange={e => setFormData({ ...formData, nis: e.target.value })}
-                placeholder="NIS-2026-001"
+                placeholder="Kosongkan untuk buat otomatis"
                 className={`w-full px-3 py-2 bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white text-xs ${
                   formErrors.nis ? 'border-rose-300' : 'border-slate-200'
                 }`}
@@ -659,7 +727,7 @@ export const StudentsPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Jenis Kelamin
+                Jenis Kelamin <span className="text-slate-400 font-normal">(Opsional)</span>
               </label>
               <select
                 value={formData.gender}
@@ -673,7 +741,7 @@ export const StudentsPage: React.FC = () => {
 
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Tingkat / Kelas *
+                Tingkat / Kelas <span className="text-rose-500">* (Wajib)</span>
               </label>
               <select
                 value={formData.grade}
@@ -710,7 +778,7 @@ export const StudentsPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Asal Sekolah (Opsional)
+                Asal Sekolah <span className="text-slate-400 font-normal">(Opsional)</span>
               </label>
               <input
                 type="text"
@@ -722,7 +790,7 @@ export const StudentsPage: React.FC = () => {
             </div>
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                No HP Siswa (Opsional)
+                No HP Siswa <span className="text-slate-400 font-normal">(Opsional)</span>
               </label>
               <input
                 type="text"
@@ -737,7 +805,7 @@ export const StudentsPage: React.FC = () => {
           {/* Program Enrolled (Multi-select checkboxes) */}
           <div>
             <label className="block font-semibold text-slate-700 mb-1">
-              Pilihan Program Belajar *
+              Pilihan Program Belajar <span className="text-slate-400 font-normal">(Opsional)</span>
             </label>
             <div className="grid grid-cols-2 gap-2 p-3 bg-slate-50 border border-slate-200 rounded-xl">
               {programs.map(prog => {
@@ -770,34 +838,28 @@ export const StudentsPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                Nama Orang Tua / Wali *
+                Nama Orang Tua / Wali <span className="text-slate-400 font-normal">(Opsional)</span>
               </label>
               <input
                 type="text"
                 value={formData.parentName}
                 onChange={e => setFormData({ ...formData, parentName: e.target.value })}
-                placeholder="Nama ayah/ibu"
-                className={`w-full px-3 py-2 bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white text-xs ${
-                  formErrors.parentName ? 'border-rose-300' : 'border-slate-200'
-                }`}
+                placeholder="Nama ayah/ibu (bisa dikosongi)"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white text-xs"
               />
-              {formErrors.parentName && <p className="text-rose-500 text-[10px] mt-0.5">{formErrors.parentName}</p>}
             </div>
 
             <div>
               <label className="block font-semibold text-slate-700 mb-1">
-                No HP / WhatsApp Orang Tua *
+                No HP / WhatsApp Orang Tua <span className="text-slate-400 font-normal">(Opsional)</span>
               </label>
               <input
                 type="text"
                 value={formData.parentPhone}
                 onChange={e => setFormData({ ...formData, parentPhone: e.target.value })}
-                placeholder="0812-xxxx-xxxx"
-                className={`w-full px-3 py-2 bg-slate-50 border rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white text-xs ${
-                  formErrors.parentPhone ? 'border-rose-300' : 'border-slate-200'
-                }`}
+                placeholder="0812-xxxx-xxxx (bisa dikosongi)"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white text-xs"
               />
-              {formErrors.parentPhone && <p className="text-rose-500 text-[10px] mt-0.5">{formErrors.parentPhone}</p>}
             </div>
           </div>
 

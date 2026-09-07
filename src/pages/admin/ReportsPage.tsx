@@ -23,7 +23,11 @@ import { StatusBadge } from '../../components/common/StatusBadge';
 import { wordExportService } from '../../services/wordExportService';
 import { financialExportService } from '../../services/financialExportService';
 
-export const ReportsPage: React.FC = () => {
+interface ReportsPageProps {
+  onNavigate?: (page: string) => void;
+}
+
+export const ReportsPage: React.FC<ReportsPageProps> = ({ onNavigate }) => {
   const {
     students,
     teachers,
@@ -469,6 +473,17 @@ export const ReportsPage: React.FC = () => {
               </div>
             )}
           </div>
+
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate('google-sheets')}
+              className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title="Buka Google Sheets untuk ekspor/impor spreadsheet langsung"
+            >
+              <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Google Sheets</span>
+            </button>
+          )}
         </div>
       </div>
 

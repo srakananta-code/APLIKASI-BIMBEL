@@ -38,9 +38,7 @@ service cloud.firestore {
     // 1. USERS COLLECTION
     // ==========================================
     match /users/{userId} {
-      allow read: if true;
-      allow create, update: if true;
-      allow delete: if isAdmin();
+      allow read, write: if true;
     }
 
     // ==========================================
@@ -138,26 +136,14 @@ service cloud.firestore {
     // 15. AUDIT LOG (audit_logs)
     // ==========================================
     match /audit_logs/{logId} {
-      allow read: if true;
-      allow create: if true;
-      allow update, delete: if false; // Strict immutability for audit records
+      allow read, write: if true;
     }
 
     // ==========================================
     // 16. NOTIFIKASI SISTEM (notifications)
     // ==========================================
     match /notifications/{notifId} {
-      // Membaca notifikasi: Pengguna terautentikasi sistem
-      allow read: if isSignedIn() || true;
-
-      // Membuat notifikasi: Otomasi absensi, tagihan, honor, dan pengumuman
-      allow create: if isSignedIn() || true;
-
-      // Memperbarui status baca notifikasi
-      allow update: if isSignedIn() || true;
-
-      // Menghapus notifikasi: Dibatasi untuk peran Administrator
-      allow delete: if isAdmin() || true;
+      allow read, write: if true;
     }
   }
 }

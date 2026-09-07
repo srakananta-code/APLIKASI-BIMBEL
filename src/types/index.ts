@@ -79,6 +79,7 @@ export interface Student {
   school?: string;
   grade: string; // e.g., 'Kelas 5 SD', 'Kelas 8 SMP'
   programIds: string[]; // Enrolled programs
+  programNames?: string[];
   parentName: string;
   parentPhone: string;
   phone?: string;
@@ -545,4 +546,64 @@ export interface AuditLog {
   relatedEntity?: string;
   metadata?: Record<string, any>;
   createdAt?: string;
+}
+
+export interface GoogleDriveFile {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: string;
+  modifiedTime?: string;
+  createdTime?: string;
+  webViewLink?: string;
+  webContentLink?: string;
+  iconLink?: string;
+  thumbnailLink?: string;
+  parents?: string[];
+  owners?: {
+    displayName?: string;
+    emailAddress?: string;
+    photoLink?: string;
+  }[];
+}
+
+export interface GoogleDriveAbout {
+  user?: {
+    displayName: string;
+    emailAddress: string;
+    photoLink?: string;
+  };
+  storageQuota?: {
+    limit?: string;
+    usage?: string;
+    usageInDrive?: string;
+    usageInDriveTrash?: string;
+  };
+}
+
+export interface GoogleSheetTab {
+  sheetId: number;
+  title: string;
+  index: number;
+  sheetType?: string;
+  gridProperties?: {
+    rowCount: number;
+    columnCount: number;
+    frozenRowCount?: number;
+    frozenColumnCount?: number;
+  };
+}
+
+export interface GoogleSpreadsheetMetadata {
+  spreadsheetId: string;
+  properties: {
+    title: string;
+    locale?: string;
+    autoRecalc?: string;
+    timeZone?: string;
+  };
+  sheets: {
+    properties: GoogleSheetTab;
+  }[];
+  spreadsheetUrl: string;
 }

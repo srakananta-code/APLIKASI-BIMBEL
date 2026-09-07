@@ -29,6 +29,8 @@ import { SettingsPage } from './pages/admin/SettingsPage';
 import { AuditLogsPage } from './pages/admin/AuditLogsPage';
 import { UsersPage } from './pages/admin/UsersPage';
 import { NotificationsPage } from './pages/common/NotificationsPage';
+import { GoogleDrivePage } from './pages/common/GoogleDrivePage';
+import { GoogleSheetsPage } from './pages/common/GoogleSheetsPage';
 
 // Teacher Pages
 import { TeacherDashboard } from './pages/teacher/TeacherDashboard';
@@ -192,7 +194,7 @@ const AppContent: React.FC = () => {
       case 'reports':
         return (
           <AdminRoute onRedirectToGuru={() => setCurrentPage('guru-dashboard')}>
-            <ReportsPage />
+            <ReportsPage onNavigate={handleNavigate} />
           </AdminRoute>
         );
       case 'users':
@@ -217,6 +219,22 @@ const AppContent: React.FC = () => {
         return (
           <AdminRoute onRedirectToGuru={() => setCurrentPage('guru-dashboard')}>
             <NotificationsPage onNavigate={handleNavigate} />
+          </AdminRoute>
+        );
+      case 'google-drive':
+        return (
+          <AdminRoute onRedirectToGuru={() => setCurrentPage('guru-dashboard')}>
+            <GoogleDrivePage
+              onNavigate={handleNavigate}
+            />
+          </AdminRoute>
+        );
+      case 'google-sheets':
+        return (
+          <AdminRoute onRedirectToGuru={() => setCurrentPage('guru-dashboard')}>
+            <GoogleSheetsPage
+              onNavigate={handleNavigate}
+            />
           </AdminRoute>
         );
 
@@ -267,6 +285,18 @@ const AppContent: React.FC = () => {
         return (
           <GuruRoute onRedirectToAdmin={() => setCurrentPage('dashboard')}>
             <NotificationsPage onNavigate={handleNavigate} />
+          </GuruRoute>
+        );
+      case 'guru-drive':
+        return (
+          <GuruRoute onRedirectToAdmin={() => setCurrentPage('dashboard')}>
+            <GoogleDrivePage onNavigate={handleNavigate} />
+          </GuruRoute>
+        );
+      case 'guru-sheets':
+        return (
+          <GuruRoute onRedirectToAdmin={() => setCurrentPage('dashboard')}>
+            <GoogleSheetsPage onNavigate={handleNavigate} />
           </GuruRoute>
         );
 

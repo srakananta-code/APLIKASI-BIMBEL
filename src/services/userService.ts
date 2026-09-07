@@ -6,6 +6,7 @@ import {
   setDoc, 
   updateDoc, 
   deleteDoc, 
+  writeBatch,
   query, 
   orderBy 
 } from 'firebase/firestore';
@@ -16,7 +17,7 @@ import {
   signOut as secondarySignOut, 
   updateProfile 
 } from 'firebase/auth';
-import { db } from '../lib/firebase';
+import { db, OperationType, handleFirestoreError } from '../lib/firebase';
 import firebaseConfig from '../../firebase-applet-config.json';
 import { User, UserRole } from '../types';
 import { auditLogService } from './auditLogService';
@@ -354,10 +355,107 @@ export const userService = {
   },
 
   /**
+   * Menghapus akun user secara permanen dari Firestore users/{uid}
+   */
+  async deleteUser(
+    uid: string,
+    adminUser?: { id: string; name: string }
+  ): Promise<boolean> {
+    try {
+      const docRef = doc(db, COLLECTION_NAME, uid);
+      await deleteDoc(docRef);
+
+      await auditLogService.create({
+        userId: adminUser?.id || 'ADMIN',
+        userName: adminUser?.name || 'Administrator',
+        role: 'ADMIN',
+        userRole: 'ADMIN',
+        action: 'USER_DELETED',
+        targetId: uid,
+        details: `Akun pengguna ${uid} telah dihapus permanen oleh Administrator.`,
+        description: 'Hapus Akun Pengguna'
+      }).catch(() => {});
+
+      return true;
+    } catch (err: any) {
+      if (err?.message?.includes('permission') || err?.code?.includes('permission')) {
+        handleFirestoreError(err, OperationType.DELETE, `${COLLECTION_NAME}/${uid}`);
+      }
+      console.error(`Error deleting user ${uid}:`, err);
+      throw err;
+    }
+  },
+
+  /**
+   * Menghapus semua akun demo dan akun uji coba lain, hanya menyisakan akun admin yang sedang aktif
+   */
+  async cleanDemoUsers(
+    currentAdminUser?: { id?: string; uid?: string; email?: string }
+  ): Promise<number> {
+    try {
+      const usersSnap = await getDocs(collection(db, COLLECTION_NAME));
+      if (usersSnap.empty) return 0;
+
+      const currentEmail = (currentAdminUser?.email || '').toLowerCase().trim();
+      const currentId = currentAdminUser?.id || currentAdminUser?.uid || '';
+
+      const batch = writeBatch(db);
+      let deletedCount = 0;
+
+      usersSnap.docs.forEach(docSnap => {
+        const data = docSnap.data();
+        const docId = docSnap.id;
+        const email = (data.email || '').toLowerCase().trim();
+
+        const isCurrent = (
+          (currentEmail && email === currentEmail) ||
+          (currentId && (docId === currentId || data.uid === currentId))
+        );
+
+        if (!isCurrent) {
+          batch.delete(docSnap.ref);
+          deletedCount++;
+        } else {
+          // Pastikan akun admin aktif diaktifkan statusnya
+          if (data.isActive === false) {
+            batch.update(docSnap.ref, { isActive: true, status: 'AKTIF' });
+          }
+        }
+      });
+
+      if (deletedCount > 0) {
+        await batch.commit();
+      }
+
+      return deletedCount;
+    } catch (err: any) {
+      if (err?.message?.includes('permission') || err?.code?.includes('permission')) {
+        handleFirestoreError(err, OperationType.DELETE, COLLECTION_NAME);
+      }
+      console.error('Error cleaning demo users:', err);
+      throw err;
+    }
+  },
+
+  /**
    * Seed / Provision Akun Demo Awal di Firebase Authentication & Firestore users
    * Ini memastikan reviewer / user dapat langsung login dengan kredensial demo resmi
    */
   async seedInitialAuthUsers(): Promise<void> {
+    if (typeof window !== 'undefined') {
+      if (localStorage.getItem('educendikia_demo_cleaned') === 'true') {
+        return;
+      }
+      const stored = localStorage.getItem('educendikia_auth_user');
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.email && !parsed.email.toLowerCase().endsWith('@educendikia.com') && parsed.id !== 'USR-ADMIN') {
+            return;
+          }
+        } catch (e) {}
+      }
+    }
     const defaultAccounts = [
       {
         email: 'admin@educendikia.com',

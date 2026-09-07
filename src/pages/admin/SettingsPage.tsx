@@ -121,7 +121,10 @@ export const SettingsPage: React.FC = () => {
     currentUser,
     updateInstitutionSettings,
     updateRates,
-    showToast
+    showToast,
+    clearAllDemoData,
+    resetToDefaultData,
+    isDemoCleaned
   } = useApp();
 
   const [activeTab, setActiveTab] = useState<'rates' | 'profile' | 'billing' | 'whatsapp' | 'history' | 'users'>('rates');
@@ -216,6 +219,20 @@ export const SettingsPage: React.FC = () => {
     tagline: '',
     applyImmediately: true
   });
+
+  const [isClearingData, setIsClearingData] = useState(false);
+
+  const handleClearDemoData = async () => {
+    if (!window.confirm('PERINGATAN: Apakah Anda yakin ingin mengosongkan seluruh data demo?\n\nSemua siswa dummy, guru demo, jadwal, pertemuan, dan tagihan demo akan dihapus permanen sehingga Anda memulai dari database yang 100% bersih untuk bimbel Anda.')) {
+      return;
+    }
+    setIsClearingData(true);
+    try {
+      await clearAllDemoData();
+    } finally {
+      setIsClearingData(false);
+    }
+  };
 
   const handleOpenAddPreset = () => {
     setEditingPresetId(null);
@@ -1381,6 +1398,62 @@ _{nama_bimbel}_`
                   </p>
                   <p className="text-[9px]">{profileForm.principalNip || '-'}</p>
                 </div>
+              </div>
+            </div>
+
+            {/* Pengelolaan Data & Pembersihan Database */}
+            <div className="lg:col-span-12 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                    <Trash2 className="w-4 h-4 text-rose-600" />
+                    <span>Pengelolaan Data & Pembersihan Database</span>
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Pastikan bimbel Anda bebas dari data demo contoh sebelum digunakan untuk operasional nyata.
+                  </p>
+                </div>
+                <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold self-start sm:self-auto ${
+                  isDemoCleaned 
+                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                    : 'bg-amber-50 text-amber-700 border border-amber-200'
+                }`}>
+                  {isDemoCleaned ? 'Database Bersih (Aktif)' : 'Data Demo Terdeteksi'}
+                </span>
+              </div>
+
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-600 space-y-1">
+                <p className="font-semibold text-slate-800">Status Database Bimbel Anda:</p>
+                <p>
+                  {isDemoCleaned 
+                    ? 'Database Anda saat ini dalam kondisi bersih 100% tanpa sisa data demo. Anda dapat langsung memasukkan siswa, guru, jadwal, dan transaksi asli bimbel Anda.'
+                    : 'Sistem saat ini masih memuat data contoh/demo. Jika Anda ingin mengosongkan seluruh data siswa, tentor, dan jadwal agar bersih tanpa sisa, klik tombol Kosongkan Data Demo di bawah.'}
+                </p>
+              </div>
+
+              <div className="flex flex-wrap gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={handleClearDemoData}
+                  disabled={isClearingData}
+                  className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>{isClearingData ? 'Sedang Mengosongkan Data...' : 'Kosongkan Seluruh Data Demo (Mulai Dari Bersih)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm('Reset database kembali ke dataset demo awal? Semua data saat ini akan ditimpa dengan data contoh.')) {
+                      resetToDefaultData();
+                    }
+                  }}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl text-xs font-semibold transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4 text-slate-600" />
+                  <span>Isi Data Demo Awal (Untuk Uji Coba)</span>
+                </button>
               </div>
             </div>
           </div>

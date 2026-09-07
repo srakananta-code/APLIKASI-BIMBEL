@@ -21,7 +21,9 @@ import {
   ShieldCheck,
   UserCog,
   LogOut,
-  Bell
+  Bell,
+  HardDrive,
+  FileSpreadsheet
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { useAuth } from '../../context/AuthContext';
@@ -109,6 +111,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       groupTitle: 'LAPORAN & SISTEM',
       items: [
         { id: 'reports', label: 'Laporan Lengkap', icon: <FileText className="w-4 h-4" /> },
+        { id: 'google-sheets', label: 'Google Sheets', icon: <FileSpreadsheet className="w-4 h-4 text-emerald-400" /> },
+        { id: 'google-drive', label: 'Google Drive', icon: <HardDrive className="w-4 h-4 text-indigo-400" /> },
         { id: 'notifications', label: 'Pusat Notifikasi', icon: <Bell className="w-4 h-4 text-blue-400" /> }
       ]
     },
@@ -140,7 +144,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
       items: [
         { id: 'guru-attendance', label: 'Absensi Siswa (Live)', icon: <Sparkles className="w-4 h-4 text-emerald-400" />, highlight: true },
         { id: 'guru-meetings', label: 'Pertemuan Saya', icon: <CalendarCheck className="w-4 h-4" /> },
-        { id: 'guru-students', label: 'Siswa Bimbingan', icon: <Users className="w-4 h-4" /> }
+        { id: 'guru-students', label: 'Siswa Bimbingan', icon: <Users className="w-4 h-4" /> },
+        { id: 'guru-sheets', label: 'Google Sheets (Nilai/Rekap)', icon: <FileSpreadsheet className="w-4 h-4 text-emerald-400" /> },
+        { id: 'guru-drive', label: 'Google Drive (Modul)', icon: <HardDrive className="w-4 h-4 text-indigo-400" /> }
       ]
     },
     {

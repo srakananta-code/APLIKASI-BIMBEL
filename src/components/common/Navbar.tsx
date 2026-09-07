@@ -35,6 +35,8 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onNavigate }) =
     markNotificationAsRead,
     markAllNotificationsAsRead,
     resetToDefaultData,
+    clearAllDemoData,
+    isDemoCleaned,
     teachers
   } = useApp();
 
@@ -153,19 +155,35 @@ export const Navbar: React.FC<NavbarProps> = ({ onToggleSidebar, onNavigate }) =
 
         {/* Right Side: Reset, Notifications, User Account Dropdown */}
         <div className="flex items-center gap-3 sm:gap-4">
-          {/* Reset Demo Data Button */}
-          <button
-            onClick={() => {
-              if (window.confirm('Reset database kembali ke dataset demo awal?')) {
-                resetToDefaultData();
-              }
-            }}
-            title="Reset ke Data Demo Awal"
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span className="hidden lg:inline">Reset Demo</span>
-          </button>
+          {/* Reset / Kosongkan Demo (Hanya untuk akun peninjau/demo, disembunyikan untuk akun asli pengguna) */}
+          {(!isDemoCleaned && (!userProfile || userProfile.email?.toLowerCase().endsWith('@educendikia.com') || userProfile.id === 'USR-ADMIN')) && (
+            <div className="hidden sm:flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  if (window.confirm('Kosongkan seluruh data demo agar database bersih 100% tanpa sisa data contoh?')) {
+                    clearAllDemoData();
+                  }
+                }}
+                title="Kosongkan Semua Data Demo"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg border border-rose-200 transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-rose-600" />
+                <span className="hidden lg:inline">Kosongkan Demo</span>
+              </button>
+              <button
+                onClick={() => {
+                  if (window.confirm('Reset database kembali ke dataset demo awal?')) {
+                    resetToDefaultData();
+                  }
+                }}
+                title="Reset ke Data Demo Awal"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span className="hidden lg:inline">Reset Demo</span>
+              </button>
+            </div>
+          )}
 
           {/* Notifications Button */}
           <div className="relative" ref={notifDropdownRef}>

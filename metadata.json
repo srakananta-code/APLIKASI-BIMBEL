@@ -1,6 +1,6 @@
 {
   "name": "Aplikasi Administrasi Les Terintegrasi",
-  "description": "Sistem administrasi bimbingan belajar multi-lembaga dengan kustomisasi master tarif les siswa & honor tentor, simulasi margin profit, paket kurikulum (Reguler, Privat, UTBK), serta broadcast pengumuman in-app.",
+  "description": "Sistem administrasi bimbingan belajar terintegrasi Google Drive dan Google Sheets, master tarif les siswa & honor tentor, ekspor/impor data spreadsheet, simulasi margin profit, paket kurikulum, serta absensi mengajar guru.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

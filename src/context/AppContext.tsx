@@ -79,6 +79,7 @@ import { rateService } from '../services/rateService';
 import { auditLogService } from '../services/auditLogService';
 import { notificationService } from '../services/notificationService';
 import { seedService } from '../services/seedService';
+import { userService } from '../services/userService';
 
 export interface ToastMessage {
   id: string;
@@ -233,8 +234,10 @@ interface AppContextType {
   addToast: (type: 'success' | 'error' | 'info' | 'warning', message: string, title?: string) => void;
   removeToast: (id: string) => void;
 
-  // Reset demo
+  // Reset demo & Clear Database
   resetToDefaultData: () => void;
+  clearAllDemoData: () => Promise<boolean>;
+  isDemoCleaned: boolean;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -263,22 +266,42 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const [isFirestoreConnected, setIsFirestoreConnected] = useState<boolean>(true);
   const [isInitialLoading, setIsInitialLoading] = useState<boolean>(true);
 
-  // Core Data States (Initialized with rich defaults for instant snappy rendering)
-  const [settings, setSettings] = useState<InstitutionSetting>(INITIAL_INSTITUTION_SETTING);
-  const [rateHistories, setRateHistories] = useState<RateHistory[]>(INITIAL_RATE_HISTORIES);
-  const [students, setStudents] = useState<Student[]>(INITIAL_STUDENTS);
-  const [teachers, setTeachers] = useState<Teacher[]>(INITIAL_TEACHERS);
-  const [programs, setPrograms] = useState<Program[]>(INITIAL_PROGRAMS);
-  const [schedules, setSchedules] = useState<Schedule[]>(INITIAL_SCHEDULES);
-  const [meetings, setMeetings] = useState<Meeting[]>(INITIAL_MEETINGS);
-  const [meetingStudents, setMeetingStudents] = useState<MeetingStudent[]>(INITIAL_MEETING_STUDENTS);
-  const [studentCharges, setStudentCharges] = useState<StudentCharge[]>(INITIAL_STUDENT_CHARGES);
-  const [studentPayments, setStudentPayments] = useState<StudentPayment[]>(INITIAL_STUDENT_PAYMENTS);
-  const [teacherHonors, setTeacherHonors] = useState<TeacherHonor[]>(INITIAL_TEACHER_HONORS);
-  const [teacherPayments, setTeacherPayments] = useState<TeacherPayment[]>(INITIAL_TEACHER_PAYMENTS);
-  const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT_LOGS);
-  const [notifications, setNotifications] = useState<SystemNotification[]>(INITIAL_NOTIFICATIONS);
+  // Periksa apakah sistem berjalan dalam mode bersih (clean slate untuk akun pengguna terdaftar)
+  const isDemoCleaned = seedService.isDemoCleaned();
+  const isRegisteredAccount = Boolean(
+    userProfile && 
+    !userProfile.email?.toLowerCase().endsWith('@educendikia.com') && 
+    userProfile.id !== 'USR-ADMIN'
+  );
+  const shouldStartEmpty = isDemoCleaned || isRegisteredAccount;
+
+  // Core Data States (Jika pengguna sudah mendaftarkan akun, mulai dari data kosong bersih 100%)
+  const [settings, setSettings] = useState<InstitutionSetting>(() => {
+    if (userProfile?.institutionName) {
+      return {
+        ...INITIAL_INSTITUTION_SETTING,
+        name: userProfile.institutionName,
+        email: userProfile.email || '',
+        phone: userProfile.phone || '',
+        isDemoCleaned: true
+      };
+    }
+    return INITIAL_INSTITUTION_SETTING;
+  });
+  const [rateHistories, setRateHistories] = useState<RateHistory[]>(() => shouldStartEmpty ? [] : INITIAL_RATE_HISTORIES);
+  const [students, setStudents] = useState<Student[]>(() => shouldStartEmpty ? [] : INITIAL_STUDENTS);
+  const [teachers, setTeachers] = useState<Teacher[]>(() => shouldStartEmpty ? [] : INITIAL_TEACHERS);
+  const [programs, setPrograms] = useState<Program[]>(() => shouldStartEmpty ? [] : INITIAL_PROGRAMS);
+  const [schedules, setSchedules] = useState<Schedule[]>(() => shouldStartEmpty ? [] : INITIAL_SCHEDULES);
+  const [meetings, setMeetings] = useState<Meeting[]>(() => shouldStartEmpty ? [] : INITIAL_MEETINGS);
+  const [meetingStudents, setMeetingStudents] = useState<MeetingStudent[]>(() => shouldStartEmpty ? [] : INITIAL_MEETING_STUDENTS);
+  const [studentCharges, setStudentCharges] = useState<StudentCharge[]>(() => shouldStartEmpty ? [] : INITIAL_STUDENT_CHARGES);
+  const [studentPayments, setStudentPayments] = useState<StudentPayment[]>(() => shouldStartEmpty ? [] : INITIAL_STUDENT_PAYMENTS);
+  const [teacherHonors, setTeacherHonors] = useState<TeacherHonor[]>(() => shouldStartEmpty ? [] : INITIAL_TEACHER_HONORS);
+  const [teacherPayments, setTeacherPayments] = useState<TeacherPayment[]>(() => shouldStartEmpty ? [] : INITIAL_TEACHER_PAYMENTS);
+  const [expenses, setExpenses] = useState<Expense[]>(() => shouldStartEmpty ? [] : INITIAL_EXPENSES);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => shouldStartEmpty ? [] : INITIAL_AUDIT_LOGS);
+  const [notifications, setNotifications] = useState<SystemNotification[]>(() => shouldStartEmpty ? [] : INITIAL_NOTIFICATIONS);
 
   // Toast state
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -323,6 +346,17 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const initializeFirestore = async () => {
       try {
         await seedService.seedIfEmpty();
+        // Cek jika akun pengguna yang login adalah akun pengguna terdaftar (bukan akun demo default),
+        // dan belum pernah dibersihkan, jalankan pembersihan otomatis data demo
+        const isCustomUser = Boolean(
+          userProfile && 
+          !userProfile.email?.toLowerCase().endsWith('@educendikia.com') && 
+          userProfile.id !== 'USR-ADMIN'
+        );
+        if (isCustomUser && !seedService.isDemoCleaned()) {
+          console.log('Akun pengguna terdaftar terdeteksi dengan sisa data demo. Mengosongkan data secara otomatis...');
+          await seedService.clearAllDemoData(userProfile);
+        }
         setIsFirestoreConnected(true);
       } catch (err) {
         console.warn('Initial seed error:', err);
@@ -343,9 +377,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 2. Students listener
       try {
         const unsubStudents = onSnapshot(collection(db, 'students'), (snap) => {
-          if (!snap.empty) {
-            setStudents(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student))));
-          }
+          setStudents(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Student))));
         }, (err) => console.warn('Students listener note:', err));
         unsubs.push(unsubStudents);
       } catch (e) {}
@@ -353,9 +385,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 3. Teachers listener
       try {
         const unsubTeachers = onSnapshot(collection(db, 'teachers'), (snap) => {
-          if (!snap.empty) {
-            setTeachers(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Teacher))));
-          }
+          setTeachers(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Teacher))));
         }, (err) => console.warn('Teachers listener note:', err));
         unsubs.push(unsubTeachers);
       } catch (e) {}
@@ -363,9 +393,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 4. Programs listener
       try {
         const unsubPrograms = onSnapshot(collection(db, 'programs'), (snap) => {
-          if (!snap.empty) {
-            setPrograms(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Program))));
-          }
+          setPrograms(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Program))));
         }, (err) => console.warn('Programs listener note:', err));
         unsubs.push(unsubPrograms);
       } catch (e) {}
@@ -373,9 +401,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 5. Schedules listener
       try {
         const unsubSchedules = onSnapshot(collection(db, 'schedules'), (snap) => {
-          if (!snap.empty) {
-            setSchedules(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Schedule))));
-          }
+          setSchedules(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Schedule))));
         }, (err) => console.warn('Schedules listener note:', err));
         unsubs.push(unsubSchedules);
       } catch (e) {}
@@ -383,9 +409,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 6. Meetings listener
       try {
         const unsubMeetings = onSnapshot(collection(db, 'meetings'), (snap) => {
-          if (!snap.empty) {
-            setMeetings(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Meeting))));
-          }
+          setMeetings(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Meeting))));
         }, (err) => console.warn('Meetings listener note:', err));
         unsubs.push(unsubMeetings);
       } catch (e) {}
@@ -393,9 +417,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 7. Meeting Students listener
       try {
         const unsubMS = onSnapshot(collection(db, 'meeting_students'), (snap) => {
-          if (!snap.empty) {
-            setMeetingStudents(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as MeetingStudent))));
-          }
+          setMeetingStudents(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as MeetingStudent))));
         }, (err) => console.warn('MeetingStudents listener note:', err));
         unsubs.push(unsubMS);
       } catch (e) {}
@@ -403,9 +425,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 8. Student Charges listener
       try {
         const unsubCharges = onSnapshot(collection(db, 'student_charges'), (snap) => {
-          if (!snap.empty) {
-            setStudentCharges(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCharge))));
-          }
+          setStudentCharges(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentCharge))));
         }, (err) => console.warn('StudentCharges listener note:', err));
         unsubs.push(unsubCharges);
       } catch (e) {}
@@ -413,9 +433,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 9. Student Payments listener
       try {
         const unsubPay = onSnapshot(collection(db, 'student_payments'), (snap) => {
-          if (!snap.empty) {
-            setStudentPayments(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentPayment))));
-          }
+          setStudentPayments(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as StudentPayment))));
         }, (err) => console.warn('StudentPayments listener note:', err));
         unsubs.push(unsubPay);
       } catch (e) {}
@@ -423,9 +441,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 10. Teacher Honors listener
       try {
         const unsubHonors = onSnapshot(collection(db, 'teacher_honors'), (snap) => {
-          if (!snap.empty) {
-            setTeacherHonors(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as TeacherHonor))));
-          }
+          setTeacherHonors(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as TeacherHonor))));
         }, (err) => console.warn('TeacherHonors listener note:', err));
         unsubs.push(unsubHonors);
       } catch (e) {}
@@ -433,9 +449,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 11. Teacher Payments listener
       try {
         const unsubTPay = onSnapshot(collection(db, 'teacher_payments'), (snap) => {
-          if (!snap.empty) {
-            setTeacherPayments(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as TeacherPayment))));
-          }
+          setTeacherPayments(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as TeacherPayment))));
         }, (err) => console.warn('TeacherPayments listener note:', err));
         unsubs.push(unsubTPay);
       } catch (e) {}
@@ -443,9 +457,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 12. Expenses listener
       try {
         const unsubExpenses = onSnapshot(collection(db, 'expenses'), (snap) => {
-          if (!snap.empty) {
-            setExpenses(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense))));
-          }
+          setExpenses(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense))));
         }, (err) => console.warn('Expenses listener note:', err));
         unsubs.push(unsubExpenses);
       } catch (e) {}
@@ -453,11 +465,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 13. Audit logs listener
       try {
         const unsubLogs = onSnapshot(collection(db, 'audit_logs'), (snap) => {
-          if (!snap.empty) {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as AuditLog));
-            list.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-            setAuditLogs(dedupById(list));
-          }
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as AuditLog));
+          list.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+          setAuditLogs(dedupById(list));
         }, (err) => console.warn('AuditLogs listener note:', err));
         unsubs.push(unsubLogs);
       } catch (e) {}
@@ -465,11 +475,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 14. Notifications listener
       try {
         const unsubNotifs = onSnapshot(collection(db, 'notifications'), (snap) => {
-          if (!snap.empty) {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as SystemNotification));
-            list.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
-            setNotifications(dedupById(list));
-          }
+          const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as SystemNotification));
+          list.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+          setNotifications(dedupById(list));
         }, (err) => console.warn('Notifications listener note:', err));
         unsubs.push(unsubNotifs);
       } catch (e) {}
@@ -477,9 +485,7 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       // 15. Rate Histories listener
       try {
         const unsubRates = onSnapshot(collection(db, 'rate_histories'), (snap) => {
-          if (!snap.empty) {
-            setRateHistories(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as RateHistory))));
-          }
+          setRateHistories(dedupById(snap.docs.map(d => ({ id: d.id, ...d.data() } as RateHistory))));
         }, (err) => console.warn('RateHistories listener note:', err));
         unsubs.push(unsubRates);
       } catch (e) {}
@@ -1774,6 +1780,37 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
   };
 
+  // 13. Kosongkan Seluruh Data Demo untuk Akun Pengguna Asli
+  const clearAllDemoData = async (): Promise<boolean> => {
+    try {
+      const activeAdmin = userProfile || currentUser;
+      const success = await seedService.clearAllDemoData(activeAdmin);
+      if (success) {
+        await userService.cleanDemoUsers(activeAdmin || undefined).catch(() => {});
+        setStudents([]);
+        setTeachers([]);
+        setPrograms([]);
+        setSchedules([]);
+        setMeetings([]);
+        setMeetingStudents([]);
+        setStudentCharges([]);
+        setStudentPayments([]);
+        setTeacherHonors([]);
+        setTeacherPayments([]);
+        setExpenses([]);
+        setNotifications([]);
+        setAuditLogs([]);
+        setRateHistories([]);
+        showToast('Database Bersih', 'Seluruh data demo dan akun dummy telah dikosongkan. Sistem sekarang bersih dan siap diisi data asli.', 'success');
+        return true;
+      }
+      return false;
+    } catch (err) {
+      showToast('Gagal Mengosongkan', 'Terjadi kesalahan saat mengosongkan data.', 'error');
+      return false;
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -1842,7 +1879,9 @@ export const AppProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         showToast,
         addToast,
         removeToast,
-        resetToDefaultData
+        resetToDefaultData,
+        clearAllDemoData,
+        isDemoCleaned: shouldStartEmpty
       }}
     >
       {children}

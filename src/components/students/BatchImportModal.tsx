@@ -42,6 +42,84 @@ interface ParsedStudentRow {
   errors: string[];
 }
 
+// Download template function (dapat dipanggil dari luar modal maupun di dalam modal)
+export const downloadStudentImportTemplate = (programs: Program[] = []) => {
+  const defaultProgramName = programs[0]?.name || 'Reguler SD';
+
+  // Susunan kolom: nama dan kelas sebagai 2 kolom utama yang wajib diisi, sisanya bisa dikosongi
+  const headers = [
+    'nama',
+    'kelas',
+    'nis',
+    'jenis_kelamin',
+    'asal_sekolah',
+    'program',
+    'nama_orang_tua',
+    'no_hp_orang_tua',
+    'no_hp_siswa',
+    'alamat',
+    'catatan'
+  ];
+
+  const sampleRows = [
+    [
+      'Ahmad Fauzan',
+      'Kelas 8 SMP',
+      'NIS-2026-101',
+      'L',
+      'SMP Negeri 1',
+      defaultProgramName,
+      'Bambang Fauzan',
+      '081234567890',
+      '081234567891',
+      'Jl. Melati No. 12, Jakarta',
+      'Fokus persiapan ujian sekolah'
+    ],
+    [
+      'Siti Nurhaliza',
+      'Kelas 5 SD',
+      '', // Kosong: NIS akan dibuat otomatis oleh sistem
+      'P',
+      '', // Kosong: Asal sekolah opsional
+      '', // Kosong: Program opsional
+      '', // Kosong: Nama orang tua opsional
+      '', // Kosong: No HP orang tua opsional
+      '', // Kosong: No HP siswa opsional
+      '', // Kosong: Alamat opsional
+      ''  // Kosong: Catatan opsional
+    ],
+    [
+      'Budi Pratama',
+      'Kelas 10 SMA',
+      '', // Kosong
+      '', // Kosong
+      '', // Kosong
+      '', // Kosong
+      '', // Kosong
+      '', // Kosong
+      '', // Kosong
+      '', // Kosong
+      ''  // Kosong
+    ]
+  ];
+
+  // Format as CSV with BOM for proper Excel UTF-8 display
+  const csvContent = '\uFEFF' + [
+    headers.join(','),
+    ...sampleRows.map(row => row.map(val => `"${val.replace(/"/g, '""')}"`).join(','))
+  ].join('\r\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.setAttribute('download', `template_import_siswa_${new Date().toISOString().slice(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
+
 export const BatchImportModal: React.FC<BatchImportModalProps> = ({
   isOpen,
   onClose,
@@ -60,82 +138,9 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Download template function
+  // Download template wrapper
   const handleDownloadTemplate = () => {
-    const defaultProgramName = programs[0]?.name || 'Reguler SD';
-    const secondaryProgramName = programs[1]?.name || 'Privat SMP';
-
-    const headers = [
-      'nama',
-      'nis',
-      'jenis_kelamin',
-      'kelas',
-      'asal_sekolah',
-      'program',
-      'nama_orang_tua',
-      'no_hp_orang_tua',
-      'no_hp_siswa',
-      'alamat',
-      'catatan'
-    ];
-
-    const sampleRows = [
-      [
-        'Ahmad Fauzan',
-        'NIS-2026-101',
-        'L',
-        'Kelas 8 SMP',
-        'SMP Negeri 1',
-        defaultProgramName,
-        'Bambang Fauzan',
-        '081234567890',
-        '081234567891',
-        'Jl. Melati No. 12, Jakarta',
-        'Fokus persiapan ujian sekolah'
-      ],
-      [
-        'Siti Nurhaliza',
-        'NIS-2026-102',
-        'P',
-        'Kelas 5 SD',
-        'SDIT Harapan Bangsa',
-        secondaryProgramName,
-        'Dewi Sartika',
-        '082198765432',
-        '',
-        'Jl. Kenanga Blok C4',
-        'Belajar Matematika & IPA'
-      ],
-      [
-        'Rian Pratama',
-        '',
-        'L',
-        'Kelas 11 SMA',
-        'SMA Negeri 3',
-        defaultProgramName,
-        'Hendra Pratama',
-        '085678901234',
-        '085678901235',
-        'Perumahan Indah Asri',
-        'NIS kosong akan di-generate otomatis'
-      ]
-    ];
-
-    // Format as CSV with BOM for proper Excel UTF-8 display
-    const csvContent = '\uFEFF' + [
-      headers.join(','),
-      ...sampleRows.map(row => row.map(val => `"${val.replace(/"/g, '""')}"`).join(','))
-    ].join('\r\n');
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `template_import_siswa_${new Date().toISOString().slice(0, 10)}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    downloadStudentImportTemplate(programs);
   };
 
   // Helper to resolve program IDs from names
@@ -218,9 +223,14 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
     if (nameIdx === -1) nameIdx = headerCells.findIndex(h => h === 'name' || h === 'siswa' || h === 'namasiswa');
     if (nameIdx === -1) nameIdx = 0; // fallback
 
+    let gradeIdx = headerCells.findIndex(h => h.includes('kelas') || h === 'grade' || h === 'tingkat');
+    // Jika format 2 kolom sederhana (Nama, Kelas) atau kelas di kolom ke-2
+    if (gradeIdx === -1 && headerCells.length >= 2 && !headerCells[1].includes('nis')) {
+      gradeIdx = 1;
+    }
+
     const nisIdx = headerCells.findIndex(h => h === 'nis' || h.includes('nomorinduk') || h === 'nisn');
     const genderIdx = headerCells.findIndex(h => h.includes('kelamin') || h === 'gender' || h === 'jk');
-    const gradeIdx = headerCells.findIndex(h => h.includes('kelas') || h === 'grade' || h === 'tingkat');
     const schoolIdx = headerCells.findIndex(h => h.includes('sekolah') || h === 'school');
     const programIdx = headerCells.findIndex(h => h.includes('program') || h === 'paket');
     const parentNameIdx = headerCells.findIndex(h => h.includes('orang') || h.includes('ortu') || h === 'wali' || h === 'parent');
@@ -229,7 +239,7 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
     const addressIdx = headerCells.findIndex(h => h.includes('alamat') || h === 'address');
     const notesIdx = headerCells.findIndex(h => h.includes('catatan') || h === 'notes' || h === 'keterangan');
 
-    const startIndex = (lines[0].toLowerCase().includes('nama') || lines[0].toLowerCase().includes('nis')) ? 1 : 0;
+    const startIndex = (lines[0].toLowerCase().includes('nama') || lines[0].toLowerCase().includes('nis') || lines[0].toLowerCase().includes('kelas')) ? 1 : 0;
     const existingNisSet = new Set(existingStudents.map(s => s.nis.trim().toLowerCase()));
     const generatedNisSet = new Set<string>();
 
@@ -242,9 +252,9 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
       if (cells.every(c => !c.trim())) continue;
 
       const rawName = nameIdx !== -1 ? (cells[nameIdx] || '') : '';
+      const rawGrade = gradeIdx !== -1 ? (cells[gradeIdx] || '') : '';
       let rawNis = nisIdx !== -1 ? (cells[nisIdx] || '').trim() : '';
       const rawGender = genderIdx !== -1 ? (cells[genderIdx] || '').toUpperCase() : 'L';
-      const rawGrade = gradeIdx !== -1 ? (cells[gradeIdx] || 'Kelas 8 SMP') : 'Kelas 8 SMP';
       const rawSchool = schoolIdx !== -1 ? (cells[schoolIdx] || '') : '';
       const rawProgram = programIdx !== -1 ? (cells[programIdx] || '') : '';
       const rawParentName = parentNameIdx !== -1 ? (cells[parentNameIdx] || '') : '';
@@ -280,22 +290,18 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
       // Program resolution
       const programInfo = resolveProgramIds(rawProgram);
 
-      // Validation
+      // Validation: HANYA Nama dan Kelas yang WAJIB diisi, sisanya bebas dikosongi
       const errors: string[] = [];
       if (!rawName.trim()) {
         errors.push('Nama siswa wajib diisi');
       }
 
+      if (!rawGrade.trim()) {
+        errors.push('Kelas wajib diisi');
+      }
+
       if (!isAutoNis && existingNisSet.has(rawNis.toLowerCase())) {
         errors.push(`NIS "${rawNis}" sudah terdaftar di sistem`);
-      }
-
-      if (!rawParentName.trim()) {
-        errors.push('Nama orang tua wajib diisi');
-      }
-
-      if (!rawParentPhone.trim()) {
-        errors.push('No HP orang tua wajib diisi');
       }
 
       parsed.push({
@@ -305,11 +311,11 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
         isAutoNis,
         gender,
         school: rawSchool.trim(),
-        grade: rawGrade.trim() || 'Kelas 8 SMP',
+        grade: rawGrade.trim(),
         programNames: programInfo.names,
         programIds: programInfo.ids,
-        parentName: rawParentName.trim(),
-        parentPhone: rawParentPhone,
+        parentName: rawParentName.trim() || '-',
+        parentPhone: rawParentPhone || '-',
         studentPhone: rawStudentPhone.replace(/[^0-9+]/g, ''),
         address: rawAddress.trim(),
         notes: rawNotes.trim(),
@@ -433,24 +439,28 @@ export const BatchImportModal: React.FC<BatchImportModalProps> = ({
         <div className="p-4 sm:p-5 overflow-y-auto space-y-4 flex-1">
           
           {/* STEP 1: Unduh Template */}
-          <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50/80 via-purple-50/50 to-white border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="space-y-1">
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-50/90 via-purple-50/60 to-white border border-indigo-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[11px] font-bold flex items-center justify-center shrink-0">
                   1
                 </span>
                 <h3 className="font-bold text-slate-900 text-xs sm:text-sm">
-                  Unduh Template Spreadsheet (.CSV)
+                  Unduh Template Spreadsheet Siswa (.CSV)
                 </h3>
               </div>
               <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed pl-7">
-                Gunakan template resmi agar susunan kolom nama, NIS, kelas, nomor HP, dan program langsung cocok otomatis.
+                Ketentuan: Hanya kolom <strong className="text-indigo-700 bg-indigo-100/70 px-1.5 py-0.5 rounded font-bold">nama</strong> dan <strong className="text-indigo-700 bg-indigo-100/70 px-1.5 py-0.5 rounded font-bold">kelas</strong> yang wajib diisi. Sisanya (NIS, jenis kelamin, asal sekolah, program, nama orang tua, nomor HP, alamat, catatan) <span className="text-emerald-700 font-semibold">bisa dikosongi saja</span>.
               </p>
+              <div className="flex items-center gap-1.5 pl-7 flex-wrap pt-0.5">
+                <span className="text-[10px] font-bold px-2 py-0.5 bg-indigo-600 text-white rounded-md">Wajib: nama, kelas</span>
+                <span className="text-[10px] font-medium px-2 py-0.5 bg-slate-200/80 text-slate-700 rounded-md">Bisa dikosongi: nis, jenis_kelamin, asal_sekolah, program, orang_tua, no_hp, dll</span>
+              </div>
             </div>
             <button
               type="button"
               onClick={handleDownloadTemplate}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-indigo-600 hover:text-indigo-700 text-xs font-bold border border-indigo-200 shadow-xs hover:shadow-sm transition-all cursor-pointer shrink-0"
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs hover:shadow-sm transition-all cursor-pointer shrink-0 self-start sm:self-auto"
             >
               <Download className="w-4 h-4" />
               <span>Unduh Template CSV</span>
